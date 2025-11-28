@@ -12,7 +12,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class ProductAdapter : ListAdapter<Product, ProductAdapter.ProductViewHolder>(DiffCallback) {
+class ProductAdapter(
+    private val onItemClick: (Product) -> Unit
+) : ListAdapter<Product, ProductAdapter.ProductViewHolder>(DiffCallback) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ProductViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -23,6 +25,10 @@ class ProductAdapter : ListAdapter<Product, ProductAdapter.ProductViewHolder>(Di
     override fun onBindViewHolder(holder: ProductViewHolder, position: Int) {
         val product = getItem(position)
         holder.bind(product)
+
+        holder.itemView.setOnClickListener {
+            onItemClick(product)
+        }
     }
 
     class ProductViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -30,14 +36,18 @@ class ProductAdapter : ListAdapter<Product, ProductAdapter.ProductViewHolder>(Di
         private val text2: TextView = itemView.findViewById(android.R.id.text2)
 
         fun bind(product: Product) {
-            val date = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                .format(Date(product.date))
+            // Форматируем дату
+            val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+            val dateString = dateFormat.format(Date(product.date))
 
-            val typeText = if (product.type == "income") "Доход" else "Расход"
-            val typeEmoji = if (product.type == "income") "📈" else "📉"
+            val typeText = if (product.type == "income") "📈 Доход" else "📉 Расход"
+            val amountText = if (product.type == "income")
+                "+${String.format("%.2f", product.amount)} ₽"
+            else
+                "-${String.format("%.2f", product.amount)} ₽"
 
-            text1.text = "$typeEmoji ${product.category}: ${product.amount} ₽"
-            text2.text = "$typeText • $date • ${product.comment}"
+            text1.text = "${product.category} - $amountText"
+            text2.text = "$typeText • $dateString • ${product.comment}"
         }
     }
 
