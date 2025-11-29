@@ -24,4 +24,8 @@ interface ProductDao {
 
     @Query("SELECT * FROM products WHERE category = :category AND type = :type")
     suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product>
+
+
+    @Insert
+    suspend fun insertReturnId(product: Product): Long
 }

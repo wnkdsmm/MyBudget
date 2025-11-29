@@ -4,9 +4,7 @@ class ProductRepository(private val productDao: ProductDao) {
 
     val allProducts: Flow<List<Product>> = productDao.getAllProducts()
 
-    suspend fun insert(product: Product) {
-        productDao.insert(product)
-    }
+
 
     suspend fun update(product: Product) {
         productDao.update(product)
@@ -33,5 +31,10 @@ class ProductRepository(private val productDao: ProductDao) {
     }
     suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product> {
         return productDao.getProductsByCategoryAndType(category, type)
+    }
+
+    suspend fun insert(product: Product): Product {
+        val id = productDao.insertReturnId(product)
+        return product.copy(id = id)
     }
 }
