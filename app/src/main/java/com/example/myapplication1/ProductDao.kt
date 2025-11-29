@@ -21,4 +21,7 @@ interface ProductDao {
 
     @Query("SELECT SUM(amount) FROM products WHERE type = :type")
     suspend fun getTotalByType(type: String): Double?
+
+    @Query("SELECT * FROM products WHERE category = :category AND type = :type")
+    suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product>
 }

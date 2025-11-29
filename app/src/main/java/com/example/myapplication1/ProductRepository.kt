@@ -31,4 +31,7 @@ class ProductRepository(private val productDao: ProductDao) {
     suspend fun getBalance(): Double {
         return getTotalIncome() - getTotalExpenses()
     }
+    suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product> {
+        return productDao.getProductsByCategoryAndType(category, type)
+    }
 }
