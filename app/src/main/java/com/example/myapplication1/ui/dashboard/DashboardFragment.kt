@@ -4,6 +4,7 @@ import Product
 import ProductRepository
 import android.graphics.Color
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -35,6 +36,8 @@ class DashboardFragment : Fragment() {
     private var startDate: Long = 0L
     private var endDate: Long = System.currentTimeMillis()
 
+    private var dateSelectionDialog: android.app.AlertDialog? = null
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -64,13 +67,50 @@ class DashboardFragment : Fragment() {
         }
         rootView.addView(title)
 
-        // Контейнер для общей статистики
+        // Контейнер для общей статистики с иконкой календаря
+        val statsHeaderContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setPadding(30, 10, 30, 10)
+            }
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        // Заголовок статистики
+        val statsTitle = TextView(requireContext()).apply {
+            text = "Общие доходы/расходы"
+            textSize = 16f
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+            }
+        }
+        statsHeaderContainer.addView(statsTitle)
+
+        // Иконка календаря
+        val calendarIcon = TextView(requireContext()).apply {
+            text = "📅"
+            textSize = 20f
+            setPadding(20, 10, 20, 10)
+            setOnClickListener { showDateSelectionDialog() }
+            gravity = Gravity.CENTER
+        }
+        statsHeaderContainer.addView(calendarIcon)
+
+        rootView.addView(statsHeaderContainer)
+
+        // Контейнер для статистики
         val statsContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setPadding(30, 20, 30, 20)
+                setPadding(30, 0, 30, 20)
             }
             orientation = LinearLayout.VERTICAL
         }
@@ -119,7 +159,7 @@ class DashboardFragment : Fragment() {
         totalIncomeText = TextView(requireContext()).apply {
             text = "0 ₽"
             textSize = 16f
-            setTextColor(Color.parseColor("#4CAF50")) // зеленый
+            setTextColor(Color.parseColor("#4CAF50"))
         }
         incomeContainer.addView(totalIncomeText)
 
@@ -145,7 +185,7 @@ class DashboardFragment : Fragment() {
         totalExpenseText = TextView(requireContext()).apply {
             text = "0 ₽"
             textSize = 16f
-            setTextColor(Color.parseColor("#F44336")) // красный
+            setTextColor(Color.parseColor("#F44336"))
         }
         expenseContainer.addView(totalExpenseText)
 
@@ -166,152 +206,6 @@ class DashboardFragment : Fragment() {
             setBackgroundColor(Color.LTGRAY)
         }
         rootView.addView(divider1)
-
-        // Контейнер для выбора периода
-        val periodContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setPadding(30, 10, 30, 20)
-            }
-            orientation = LinearLayout.VERTICAL
-        }
-
-
-
-        // Контейнер для дат
-        val datesContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        // Дата ОТ
-        val fromContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-                marginEnd = 10
-            }
-            orientation = LinearLayout.VERTICAL
-        }
-
-        dateFromText = TextView(requireContext()).apply {
-            text = "Начало периода"
-            textSize = 16f
-            setPadding(0, 5, 0, 0)
-            setOnClickListener { showDatePicker(true) }
-
-            setPadding(20, 10, 20, 10)
-        }
-        fromContainer.addView(dateFromText)
-
-        // Дата ДО
-        val toContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-                marginStart = 10
-            }
-            orientation = LinearLayout.VERTICAL
-        }
-
-        dateToText = TextView(requireContext()).apply {
-            text = formatDate(System.currentTimeMillis())
-            textSize = 16f
-            setPadding(0, 5, 0, 0)
-            setOnClickListener { showDatePicker(false) }
-
-            setPadding(20, 10, 20, 10)
-        }
-        toContainer.addView(dateToText)
-
-        datesContainer.addView(fromContainer)
-        datesContainer.addView(toContainer)
-        periodContainer.addView(datesContainer)
-
-        // Контейнер для кнопок
-        val buttonsContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        // Кнопка применения периода
-        val applyButton = TextView(requireContext()).apply {
-            text = "Применить"
-            textSize = 16f
-            gravity = android.view.Gravity.CENTER
-            setBackgroundColor(Color.GRAY)
-            setPadding(0, 15, 0, 15)
-            setOnClickListener { applyDateFilter() }
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-                marginEnd = 5
-                topMargin = 10
-            }
-            val border = android.graphics.drawable.GradientDrawable()
-            border.setColor(Color.TRANSPARENT) // прозрачная заливка
-            border.setStroke(2, Color.DKGRAY) // рамка 2px темно-серая
-            border.cornerRadius = 8f // скругленные углы
-
-            background = border
-        }
-
-        // Кнопка сброса периода
-        val resetButton = TextView(requireContext()).apply {
-            text = "Сброс"
-            textSize = 16f
-            gravity = android.view.Gravity.CENTER
-            setBackgroundColor(Color.GRAY)
-            setTextColor(Color.WHITE)
-            setPadding(0, 15, 0, 15)
-            setOnClickListener { resetDateFilter() }
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-                marginStart = 5
-                topMargin = 10
-            }
-            val border = android.graphics.drawable.GradientDrawable()
-            border.setColor(Color.TRANSPARENT) // прозрачная заливка
-            border.setStroke(2, Color.DKGRAY) // рамка 2px темно-серая
-            border.cornerRadius = 8f // скругленные углы
-
-            background = border
-        }
-
-        buttonsContainer.addView(applyButton)
-        buttonsContainer.addView(resetButton)
-        periodContainer.addView(buttonsContainer)
-
-        rootView.addView(periodContainer)
-
-        // Разделитель
-        val divider0 = View(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                1
-            ).apply {
-                setMargins(20, 10, 20, 10)
-            }
-            setBackgroundColor(Color.LTGRAY)
-        }
-        rootView.addView(divider0)
 
         // Диаграмма доходов
         val incomeChartTitle = TextView(requireContext()).apply {
@@ -376,6 +270,180 @@ class DashboardFragment : Fragment() {
         observeData()
     }
 
+    private fun showDateSelectionDialog() {
+        val dialogView = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 30, 40, 20)
+        }
+
+        // Заголовок
+        val title = TextView(requireContext()).apply {
+            text = "Выберите период"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 20)
+        }
+        dialogView.addView(title)
+
+        // Контейнер для дат (рядом)
+        val datesContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        // Дата ОТ
+        val fromContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+                marginEnd = 10
+            }
+            orientation = LinearLayout.VERTICAL
+        }
+
+
+        dateFromText = TextView(requireContext()).apply {
+            text = if (startDate == 0L) "Не выбрано" else formatDate(startDate)
+            textSize = 16f
+            setPadding(10, 10, 10, 10)
+            setOnClickListener { showDatePicker(true) }
+
+            // Простая рамка
+            val border = android.graphics.drawable.GradientDrawable()
+            border.setStroke(1, Color.GRAY)
+            border.cornerRadius = 4f
+            background = border
+        }
+        fromContainer.addView(dateFromText)
+
+        // Дата ДО
+        val toContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+                marginStart = 10
+            }
+            orientation = LinearLayout.VERTICAL
+        }
+
+
+        dateToText = TextView(requireContext()).apply {
+            text = formatDate(endDate)
+            textSize = 16f
+            setPadding(10, 10, 10, 10)
+            setOnClickListener { showDatePicker(false) }
+
+            // Простая рамка
+            val border = android.graphics.drawable.GradientDrawable()
+            border.setStroke(1, Color.GRAY)
+            border.cornerRadius = 4f
+            background = border
+        }
+        toContainer.addView(dateToText)
+
+        datesContainer.addView(fromContainer)
+        datesContainer.addView(toContainer)
+        dialogView.addView(datesContainer)
+
+        // Контейнер для кнопок
+        val buttonsContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 20
+            }
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        // Кнопка Сброс
+        val resetButton = TextView(requireContext()).apply {
+            text = "Сброс"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(20, 15, 20, 15)
+            setOnClickListener {
+                resetDateFilter()
+                dateSelectionDialog?.dismiss()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+                marginEnd = 5
+            }
+
+            // Простой стиль кнопки
+            setBackgroundColor(Color.GRAY)
+        }
+
+        // Кнопка Отмена
+        val cancelButton = TextView(requireContext()).apply {
+            text = "Отмена"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(20, 15, 20, 15)
+            setOnClickListener { dateSelectionDialog?.dismiss() }
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+                marginEnd = 5
+                marginStart = 5
+            }
+
+            // Простой стиль кнопки
+            setBackgroundColor(Color.GRAY)
+        }
+
+        // Кнопка Применить
+        val applyButton = TextView(requireContext()).apply {
+            text = "Применить"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(20, 15, 20, 15)
+            setOnClickListener {
+                applyDateFilter()
+                dateSelectionDialog?.dismiss()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+                marginStart = 5
+            }
+
+            // Простой стиль кнопки
+            setBackgroundColor(Color.GRAY)
+        }
+
+        buttonsContainer.addView(resetButton)
+        buttonsContainer.addView(cancelButton)
+        buttonsContainer.addView(applyButton)
+        dialogView.addView(buttonsContainer)
+
+        dateSelectionDialog = android.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+
+        dateSelectionDialog?.show()
+    }
+
     private fun setupPieCharts() {
         setupPieChart(incomePieChart)
         setupPieChart(expensePieChart)
@@ -418,7 +486,6 @@ class DashboardFragment : Fragment() {
 
     private fun filterProductsByDate(products: List<Product>): List<Product> {
         return if (startDate == 0L) {
-            // Если начальная дата не установлена, показываем все до конечной даты
             products.filter { it.date <= endDate }
         } else {
             products.filter { it.date in startDate..endDate }
@@ -458,31 +525,27 @@ class DashboardFragment : Fragment() {
 
     private fun applyDateFilter() {
         lifecycleScope.launch {
-            // Получаем текущий список продуктов из Flow
             repository.allProducts.collect { products ->
                 val filteredProducts = filterProductsByDate(products)
                 updateTotals(filteredProducts)
                 updateCharts(filteredProducts)
-                return@collect // останавливаем collect после одного обновления
+                return@collect
             }
         }
     }
 
     private fun resetDateFilter() {
-        // Сбрасываем даты
         startDate = 0L
         endDate = System.currentTimeMillis()
 
-        // Обновляем текст полей
-        dateFromText.text = "Начало периода"
+        dateFromText.text = "Не выбрано"
         dateToText.text = formatDate(endDate)
 
-        // Применяем сброшенный фильтр
         applyDateFilter()
     }
 
     private fun formatDate(timestamp: Long): String {
-        if (timestamp == 0L) return "Начало периода"
+        if (timestamp == 0L) return "Не выбрано"
         val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
         return dateFormat.format(Date(timestamp))
     }
