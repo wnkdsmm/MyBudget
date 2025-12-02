@@ -15,7 +15,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.myapplication1.BudgetApp
 import com.example.myapplication1.Category
 import com.example.myapplication1.CategoryRepository
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class NotificationsFragment : Fragment() {
@@ -79,6 +78,7 @@ class NotificationsFragment : Fragment() {
         }
         rootView.addView(addCategoryButton)
 
+        // Контейнер для доходов
         incomeContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -86,7 +86,6 @@ class NotificationsFragment : Fragment() {
             ).apply { setPadding(30, 0, 30, 20) }
             orientation = LinearLayout.VERTICAL
         }
-
         val incomeTitle = TextView(requireContext()).apply {
             text = "Категории доходов"
             textSize = 18f
@@ -95,6 +94,7 @@ class NotificationsFragment : Fragment() {
         }
         incomeContainer.addView(incomeTitle)
 
+        // Контейнер для расходов
         expenseContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -102,7 +102,6 @@ class NotificationsFragment : Fragment() {
             ).apply { setPadding(30, 0, 30, 20) }
             orientation = LinearLayout.VERTICAL
         }
-
         val expenseTitle = TextView(requireContext()).apply {
             text = "Категории расходов"
             textSize = 18f
@@ -123,6 +122,15 @@ class NotificationsFragment : Fragment() {
         rootView.addView(divider)
         rootView.addView(expenseContainer)
 
+        // Заглушка / поле под категориями
+        val placeholder = View(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                450 // высота заглушки в пикселях
+            )
+        }
+        rootView.addView(placeholder)
+
         scrollView.addView(rootView)
         return scrollView
     }
@@ -132,13 +140,11 @@ class NotificationsFragment : Fragment() {
         repository = (requireActivity().application as BudgetApp).repository
         categoryRepository = CategoryRepository()
 
-        // Загружаем категории с помощью suspend-функции
         lifecycleScope.launch {
             val categories = viewModel.getAllCategories()
             displayCategories(categories)
         }
     }
-
 
     private fun displayCategories(categories: List<Category>) {
         if (incomeContainer.childCount > 1) {
@@ -195,8 +201,6 @@ class NotificationsFragment : Fragment() {
         return layout
     }
 
-    // Методы showAddCategoryDialog, showEditCategoryDialog, showDeleteCategoryDialog
-    // теперь вызывают методы viewModel с обратными вызовами для обновления UI
     private fun showAddCategoryDialog() {
         val dialogView = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -286,7 +290,6 @@ class NotificationsFragment : Fragment() {
 
     private fun showDeleteCategoryDialog(category: Category) {
         lifecycleScope.launch {
-            val products = viewModel.getAllCategories() // Можно заменить на suspend-функцию, если нужно получать продукты
             val message = "Удалить категорию \"${category.name}\"?"
             AlertDialog.Builder(requireContext())
                 .setTitle("Удаление категории")
