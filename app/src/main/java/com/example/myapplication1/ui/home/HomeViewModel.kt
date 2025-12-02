@@ -1,77 +1,69 @@
 package com.example.myapplication1.ui.home
 
-import Product
-import ProductRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication1.Product
+import com.example.myapplication1.ProductRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 class HomeViewModel(
     private val repository: ProductRepository
 ) : ViewModel() {
 
-    private val _products = MutableStateFlow<List<Product>>(emptyList())
-    val products: StateFlow<List<Product>> get() = _products
-
-    private var startDate: Long = 0L
-    private var endDate: Long = System.currentTimeMillis()
-
+    // Поиск
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    val filteredProducts: StateFlow<List<Product>> = combine(_products, _searchQuery) { list, query ->
-        applyFilters(list, query)
+    // Фильтр по датам
+    private val _startDate = MutableStateFlow(0L)
+    private val _endDate = MutableStateFlow(System.currentTimeMillis())
+
+    // Все продукты из репозитория
+    private val allProductsFlow: StateFlow<List<Product>> =
+        repository.allProducts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Фильтрованные продукты
+    val filteredProducts: StateFlow<List<Product>> = combine(
+        allProductsFlow,
+        _searchQuery,
+        _startDate,
+        _endDate
+    ) { products, query, start, end ->
+        products.filter { it.date in start..end }
+            .filter { product ->
+                query.isBlank() ||
+                        product.category.contains(query, ignoreCase = true) ||
+                        product.comment.contains(query, ignoreCase = true)
+            }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    init {
-        refreshProducts()
-    }
-
-    private fun refreshProducts() {
-        viewModelScope.launch {
-            repository.allProducts.collect { list ->
-                _products.value = filterProductsByDate(list)
-            }
-        }
-    }
-
-    private fun filterProductsByDate(products: List<Product>): List<Product> {
-        return if (startDate == 0L) products.filter { it.date <= endDate }
-        else products.filter { it.date in startDate..endDate }
-    }
-
-    private fun applyFilters(list: List<Product>, query: String): List<Product> {
-        val dateFiltered = filterProductsByDate(list)
-        return if (query.isNotBlank()) {
-            dateFiltered.filter {
-                it.category.contains(query, ignoreCase = true) ||
-                        it.comment.contains(query, ignoreCase = true)
-            }
-        } else dateFiltered
-    }
-
+    // Обновление поиска
     fun updateSearch(query: String) {
         _searchQuery.value = query
     }
 
+    // Обновление даты начала
     fun updateStartDate(timestamp: Long) {
-        startDate = timestamp
-        refreshProducts()
+        _startDate.value = timestamp
     }
 
+    // Обновление даты окончания
     fun updateEndDate(timestamp: Long) {
-        endDate = timestamp
-        refreshProducts()
+        _endDate.value = timestamp
     }
 
+    // Сброс фильтра по датам
     fun resetDateFilter() {
-        startDate = 0L
-        endDate = System.currentTimeMillis()
-        refreshProducts()
+        _startDate.value = 0L
+        _endDate.value = System.currentTimeMillis()
+    }
+
+    // CRUD операции
+    fun addProduct(product: Product) {
+        viewModelScope.launch { repository.insert(product) }
     }
 
     fun updateProduct(product: Product) {
@@ -82,6 +74,7 @@ class HomeViewModel(
         viewModelScope.launch { repository.delete(product) }
     }
 
+    // Форматирование даты
     fun formatDate(timestamp: Long): String {
         if (timestamp == 0L) return "Не выбрано"
         return SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(timestamp))

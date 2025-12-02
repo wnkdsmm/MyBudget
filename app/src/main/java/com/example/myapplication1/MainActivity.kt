@@ -1,6 +1,6 @@
 package com.example.myapplication1
 
-import Product
+
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.os.Bundle
@@ -180,7 +180,12 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             productRepository.insert(product)
+
+            // уведомляем HomeFragment для обновления списка
+            supportFragmentManager.setFragmentResult("update_list", Bundle())
+
             Toast.makeText(this@MainActivity, "Запись добавлена", Toast.LENGTH_SHORT).show()
         }
+
     }
 }

@@ -50,6 +50,16 @@ class CategoryRepository {
 
         return snapshot.documents.map { doc -> doc.getString("name") ?: "" }
     }
+    suspend fun getCategoryById(categoryId: String): Category? {
+        val doc = categoriesCollection.document(categoryId).get().await()
+        return if (doc.exists()) {
+            Category(
+                id = doc.id,
+                name = doc.getString("name") ?: "",
+                type = doc.getString("type") ?: "expense"
+            )
+        } else null
+    }
 
 
 }

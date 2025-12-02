@@ -1,8 +1,9 @@
 package com.example.myapplication1.ui.dashboard
 
-import ProductRepository
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.myapplication1.ProductRepository
 
 class DashboardViewModelFactory(
     private val repository: ProductRepository

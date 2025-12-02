@@ -1,7 +1,5 @@
 package com.example.myapplication1.ui.home
 
-import Product
-import ProductRepository
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.graphics.Color
@@ -12,6 +10,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,6 +23,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication1.BudgetApp
+import com.example.myapplication1.Product
 import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
 import kotlinx.coroutines.launch
@@ -43,6 +43,7 @@ class HomeFragment : Fragment() {
     private lateinit var balanceText: TextView
     private lateinit var searchEditText: EditText
     private lateinit var clearSearchButton: TextView
+    private lateinit var refreshButton: Button // Новая кнопка
 
     private var dateSelectionDialog: AlertDialog? = null
     private lateinit var dateFromText: TextView
@@ -58,6 +59,7 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         setupSearch()
+        setupRefreshButton() // Инициализация кнопки обновления
         observeData()
     }
 
@@ -201,6 +203,23 @@ class HomeFragment : Fragment() {
         incomeExpenseContainer.addView(incomeContainer)
         incomeExpenseContainer.addView(expenseContainer)
         statsContainer.addView(incomeExpenseContainer)
+
+        // Кнопка обновления списка
+        refreshButton = Button(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 20
+            }
+            text = "🔄 Обновить список записей"
+
+            gravity = Gravity.CENTER
+            setPadding(20, 15, 20, 15)
+            elevation = 4f
+        }
+        statsContainer.addView(refreshButton)
+
         rootView.addView(statsContainer)
 
         val divider = View(requireContext()).apply {
@@ -225,16 +244,6 @@ class HomeFragment : Fragment() {
         recyclerView.updatePadding(bottom = getBottomNavigationHeight())
     }
 
-    private fun getBottomNavigationHeight(): Int {
-        return try {
-            val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-            if (resourceId > 0) resources.getDimensionPixelSize(resourceId)
-            else (56 * resources.displayMetrics.density).toInt()
-        } catch (_: Exception) {
-            (56 * resources.displayMetrics.density).toInt()
-        }
-    }
-
     private fun setupSearch() {
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -244,6 +253,70 @@ class HomeFragment : Fragment() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+    }
+
+    private fun setupRefreshButton() {
+        refreshButton.setOnClickListener {
+            refreshData()
+        }
+    }
+
+    private fun refreshData() {
+        // Сброс поиска
+        searchEditText.text.clear()
+        viewModel.updateSearch("")
+        clearSearchButton.visibility = View.GONE
+
+        // Сброс фильтра по датам
+        viewModel.resetDateFilter()
+
+        // Обновление данных в адаптере
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.filteredProducts.collect { products ->
+                adapter.submitList(products.map { it.copy() })
+                updateTotals(products)
+                // Показать краткое уведомление
+                showRefreshNotification()
+            }
+        }
+    }
+
+    private fun showRefreshNotification() {
+        val notification = TextView(requireContext()).apply {
+            text = "✅ Список обновлен"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(20, 10, 20, 10)
+            setBackgroundColor(Color.parseColor("#4CAF50"))
+        }
+
+        val layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            setMargins(30, 10, 30, 10)
+        }
+
+        // Добавляем уведомление над RecyclerView
+        val root = requireView() as LinearLayout
+        val dividerIndex = root.indexOfChild(root.findViewWithTag("divider") ?: root.getChildAt(root.childCount - 2))
+        root.addView(notification, dividerIndex + 1, layoutParams)
+
+        // Удаляем уведомление через 2 секунды
+        notification.postDelayed({
+            root.removeView(notification)
+        }, 2000)
+    }
+
+    private fun getBottomNavigationHeight(): Int {
+        return try {
+            val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            if (resourceId > 0) resources.getDimensionPixelSize(resourceId)
+            else (56 * resources.displayMetrics.density).toInt()
+        } catch (_: Exception) {
+            (56 * resources.displayMetrics.density).toInt()
+        }
     }
 
     private fun observeData() {
@@ -282,7 +355,44 @@ class HomeFragment : Fragment() {
     }
 
     private fun showEditProductDialog(product: Product) {
-        // Реализация редактирования продукта
+        val dialogView = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 30, 40, 20)
+        }
+
+        val amountEdit = EditText(requireContext()).apply {
+            hint = "Сумма"
+            setText(product.amount.toString())
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        val categoryEdit = EditText(requireContext()).apply {
+            hint = "Категория"
+            setText(product.category)
+        }
+
+        val commentEdit = EditText(requireContext()).apply {
+            hint = "Комментарий"
+            setText(product.comment)
+        }
+
+        dialogView.addView(amountEdit)
+        dialogView.addView(categoryEdit)
+        dialogView.addView(commentEdit)
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Редактировать запись")
+            .setView(dialogView)
+            .setPositiveButton("Сохранить") { _, _ ->
+                val updatedProduct = product.copy(
+                    amount = amountEdit.text.toString().toDoubleOrNull() ?: product.amount,
+                    category = categoryEdit.text.toString(),
+                    comment = commentEdit.text.toString()
+                )
+                viewModel.updateProduct(updatedProduct)
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
 
     // -------------------- Фильтр по датам --------------------
@@ -300,8 +410,8 @@ class HomeFragment : Fragment() {
         }
         dialogView.addView(title)
 
-        tempStartDate = viewModel.products.value.minOfOrNull { it.date } ?: 0L
-        tempEndDate = viewModel.products.value.maxOfOrNull { it.date } ?: System.currentTimeMillis()
+        tempStartDate = viewModel.filteredProducts.value.minOfOrNull { it.date } ?: 0L
+        tempEndDate = viewModel.filteredProducts.value.maxOfOrNull { it.date } ?: System.currentTimeMillis()
 
         dateFromText = createDateTextView(tempStartDate)
         dateToText = createDateTextView(tempEndDate)

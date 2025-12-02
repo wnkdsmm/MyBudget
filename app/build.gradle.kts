@@ -41,6 +41,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.material:material:1.9.0")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
     implementation("com.google.firebase:firebase-firestore-ktx")

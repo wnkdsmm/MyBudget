@@ -1,6 +1,6 @@
 package com.example.myapplication1.ui.notifications
 
-import ProductRepository
+
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
@@ -12,9 +12,12 @@ import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.myapplication1.BudgetApp
 import com.example.myapplication1.Category
 import com.example.myapplication1.CategoryRepository
+import com.example.myapplication1.ProductRepository
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class NotificationsFragment : Fragment() {
@@ -62,15 +65,12 @@ class NotificationsFragment : Fragment() {
             text = "+ Добавить новую категорию"
             textSize = 16f
             gravity = Gravity.CENTER
-
             setPadding(0, 20, 0, 20)
             setOnClickListener { showAddCategoryDialog() }
-
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(30, 0, 30, 20) }
-
             val border = android.graphics.drawable.GradientDrawable()
             border.cornerRadius = 8f
             background = border
@@ -121,15 +121,6 @@ class NotificationsFragment : Fragment() {
         rootView.addView(divider)
         rootView.addView(expenseContainer)
 
-        // Заглушка / поле под категориями
-        val placeholder = View(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                450 // высота заглушки в пикселях
-            )
-        }
-        rootView.addView(placeholder)
-
         scrollView.addView(rootView)
         return scrollView
     }
@@ -139,9 +130,13 @@ class NotificationsFragment : Fragment() {
         repository = (requireActivity().application as BudgetApp).repository
         categoryRepository = CategoryRepository()
 
-        lifecycleScope.launch {
-            val categories = viewModel.getAllCategories()
-            displayCategories(categories)
+        // Подписка на изменения категорий через StateFlow
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                viewModel.categories.collectLatest { categories ->
+                    displayCategories(categories)
+                }
+            }
         }
     }
 
@@ -202,10 +197,6 @@ class NotificationsFragment : Fragment() {
 
     private fun showAddCategoryDialog() {
         val dialogView = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
             orientation = LinearLayout.VERTICAL
             setPadding(40, 30, 40, 20)
         }
@@ -288,19 +279,16 @@ class NotificationsFragment : Fragment() {
     }
 
     private fun showDeleteCategoryDialog(category: Category) {
-        lifecycleScope.launch {
-            val message = "Удалить категорию \"${category.name}\"?"
-            AlertDialog.Builder(requireContext())
-                .setTitle("Удаление категории")
-                .setMessage(message)
-                .setPositiveButton("Удалить") { dialog, _ ->
-                    viewModel.deleteCategory(category) {
-                        Toast.makeText(requireContext(), "Категория удалена: ${category.name}", Toast.LENGTH_SHORT).show()
-                    }
-                    dialog.dismiss()
+        AlertDialog.Builder(requireContext())
+            .setTitle("Удаление категории")
+            .setMessage("Удалить категорию \"${category.name}\" и все связанные записи?")
+            .setPositiveButton("Удалить") { dialog, _ ->
+                viewModel.deleteCategory(category) {
+                    Toast.makeText(requireContext(), "Категория и связанные записи удалены: ${category.name}", Toast.LENGTH_SHORT).show()
                 }
-                .setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
-                .show()
-        }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
+            .show()
     }
 }

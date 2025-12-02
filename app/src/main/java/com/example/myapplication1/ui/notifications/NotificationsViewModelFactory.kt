@@ -2,8 +2,9 @@ package com.example.myapplication1.ui.notifications
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import ProductRepository
+
 import com.example.myapplication1.CategoryRepository
+import com.example.myapplication1.ProductRepository
 
 class NotificationsViewModelFactory(
     private val productRepository: ProductRepository,

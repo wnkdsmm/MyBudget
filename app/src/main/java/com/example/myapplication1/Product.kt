@@ -1,13 +1,10 @@
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+package com.example.myapplication1
 
-@Entity(tableName = "products")
 data class Product(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
-    val type: String, // "income" или "expense"
-    val category: String,
-    val amount: Double,
+    val id: String = "",      // ID документа Firestore
+    val type: String = "expense",
+    val category: String = "",
+    val amount: Double = 0.0,
     val date: Long = System.currentTimeMillis(),
     val comment: String = ""
 )
