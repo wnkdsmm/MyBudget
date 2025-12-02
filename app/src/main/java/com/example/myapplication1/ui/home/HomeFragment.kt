@@ -21,6 +21,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -29,7 +30,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication1.BudgetApp
 import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -38,7 +38,11 @@ import java.util.Locale
 
 class HomeFragment : Fragment() {
 
-    private lateinit var repository: ProductRepository
+    private val viewModel: HomeViewModel by viewModels {
+        val repo = (requireActivity().application as BudgetApp).repository
+        HomeViewModelFactory(repo)
+    }
+
     private lateinit var adapter: ProductAdapter
     private lateinit var recyclerView: RecyclerView
     private lateinit var totalIncomeText: TextView
@@ -47,24 +51,31 @@ class HomeFragment : Fragment() {
     private lateinit var searchEditText: EditText
     private lateinit var clearSearchButton: TextView
 
-    private var startDate: Long = 0L
-    private var endDate: Long = System.currentTimeMillis()
     private var dateSelectionDialog: AlertDialog? = null
     private lateinit var dateFromText: TextView
     private lateinit var dateToText: TextView
 
-    private var selectedDate = System.currentTimeMillis()
-    private var searchQuery = ""
-    private var currentProducts: List<Product> = emptyList()
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+
+        val rootView = buildUI()
+        return rootView
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        setupRecyclerView()
+        setupSearch()
+        observeData()
+    }
+
+    private fun buildUI(): View {
         val rootView = LinearLayout(requireContext()).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             orientation = LinearLayout.VERTICAL
-            // Добавляем отступ снизу для предотвращения перекрытия bottom navigation
             updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.bottom_navigation_height))
         }
 
@@ -105,7 +116,6 @@ class HomeFragment : Fragment() {
         statsHeaderContainer.addView(calendarIcon)
         rootView.addView(statsHeaderContainer)
 
-        // Добавляем поле поиска
         val searchContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -121,12 +131,9 @@ class HomeFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                weight = 1f
-            }
+            ).apply { weight = 1f }
             hint = "Поиск по категории или комментарию..."
             setPadding(20, 15, 20, 15)
-
         }
 
         clearSearchButton = TextView(requireContext()).apply {
@@ -136,6 +143,7 @@ class HomeFragment : Fragment() {
             visibility = View.GONE
             setOnClickListener {
                 searchEditText.text.clear()
+                viewModel.updateSearch("")
                 clearSearchButton.visibility = View.GONE
             }
         }
@@ -236,7 +244,6 @@ class HomeFragment : Fragment() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT
             )
-            // Добавляем отступ снизу для RecyclerView
             updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.recycler_view_bottom_padding))
         }
         rootView.addView(recyclerView)
@@ -244,49 +251,31 @@ class HomeFragment : Fragment() {
         return rootView
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        repository = (requireActivity().application as BudgetApp).repository
-
-        setupRecyclerView()
-        setupSearch()
-        observeData()
-    }
-
     private fun setupRecyclerView() {
         adapter = ProductAdapter { product -> showProductOptionsDialog(product) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
-
-        // Альтернативный способ: добавляем отступ для RecyclerView
         recyclerView.updatePadding(bottom = getBottomNavigationHeight())
     }
 
     private fun getBottomNavigationHeight(): Int {
         return try {
             val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-            if (resourceId > 0) {
-                resources.getDimensionPixelSize(resourceId)
-            } else {
-                // Стандартная высота bottom navigation (примерно 56dp)
-                (56 * resources.displayMetrics.density).toInt()
-            }
-        } catch (e: Exception) {
-            // Fallback значение
+            if (resourceId > 0) resources.getDimensionPixelSize(resourceId)
+            else (56 * resources.displayMetrics.density).toInt()
+        } catch (_: Exception) {
             (56 * resources.displayMetrics.density).toInt()
         }
     }
 
     private fun setupSearch() {
-        // Настраиваем слушатель для поля поиска
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                searchQuery = s.toString().trim()
-                clearSearchButton.visibility = if (searchQuery.isNotEmpty()) View.VISIBLE else View.GONE
-                applyFilters()
+                viewModel.updateSearch(s.toString().trim())
+                clearSearchButton.visibility =
+                    if (s?.isNotEmpty() == true) View.VISIBLE else View.GONE
             }
 
             override fun afterTextChanged(s: Editable?) {}
@@ -296,57 +285,12 @@ class HomeFragment : Fragment() {
     private fun observeData() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                repository.allProducts.collect { products ->
-                    currentProducts = products
-                    applyFilters()
+                viewModel.filteredProducts.collect { products ->
+                    adapter.submitList(products.map { it.copy() })
+                    updateTotals(products)
                 }
             }
         }
-    }
-
-    private fun applyFilters() {
-        val filtered = filterProducts(currentProducts)
-        adapter.submitList(filtered.map { it.copy() })
-        updateTotals(filtered)
-    }
-
-    private fun filterProducts(products: List<Product>): List<Product> {
-        // Сначала применяем фильтр по дате
-        val dateFiltered = if (startDate == 0L) {
-            products.filter { it.date <= endDate }
-        } else {
-            products.filter { it.date in startDate..endDate }
-        }
-
-        // Затем применяем поисковый запрос, если он есть
-        return if (searchQuery.isNotEmpty()) {
-            dateFiltered.filter { product ->
-                product.category.contains(searchQuery, ignoreCase = true) ||
-                        product.comment.contains(searchQuery, ignoreCase = true)
-            }
-        } else {
-            dateFiltered
-        }
-    }
-
-    private fun applyDateFilter() {
-        applyFilters()
-    }
-
-    private fun resetDateFilter() {
-        startDate = 0L
-        endDate = System.currentTimeMillis()
-
-        dateFromText?.let { it.text = formatDate(startDate) }
-        dateToText?.let { it.text = formatDate(endDate) }
-
-        // Применяем сброс фильтра
-        applyFilters()
-    }
-
-    private fun formatDate(timestamp: Long): String {
-        if (timestamp == 0L) return "Не выбрано"
-        return SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(timestamp))
     }
 
     private fun showProductOptionsDialog(product: Product) {
@@ -381,7 +325,7 @@ class HomeFragment : Fragment() {
 
         updateCategoriesSpinner(spinnerCategory, product.type == "income", product.category)
 
-        selectedDate = product.date
+        viewModel.setSelectedDate(product.date)
         updateDateText(editTextDate)
 
         radioGroupType.setOnCheckedChangeListener { _, checkedId ->
@@ -402,24 +346,26 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateCategoriesSpinner(spinner: Spinner, isIncome: Boolean, selectedCategory: String?) {
-        val categories = if (isIncome) Categories.incomeCategories else Categories.expenseCategories
+        val categories =
+            if (isIncome) Categories.incomeCategories else Categories.expenseCategories
 
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, categories)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinner.adapter = adapter
 
-        if (selectedCategory != null) {
-            val index = categories.indexOf(selectedCategory)
+        selectedCategory?.let {
+            val index = categories.indexOf(it)
             if (index >= 0) spinner.setSelection(index)
         }
     }
 
     private fun showDatePicker(editTextDate: EditText) {
-        val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
+        val calendar = Calendar.getInstance().apply { timeInMillis = viewModel.selectedDate.value }
 
         DatePickerDialog(requireContext(),
             { _, y, m, d ->
-                selectedDate = Calendar.getInstance().apply { set(y, m, d) }.timeInMillis
+                val timestamp = Calendar.getInstance().apply { set(y, m, d) }.timeInMillis
+                viewModel.setSelectedDate(timestamp)
                 updateDateText(editTextDate)
             },
             calendar.get(Calendar.YEAR),
@@ -429,8 +375,8 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateDateText(editTextDate: EditText) {
-        val format = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-        editTextDate.setText(format.format(Date(selectedDate)))
+        val formatter = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+        editTextDate.setText(formatter.format(Date(viewModel.selectedDate.value)))
     }
 
     private fun updateProductFromDialog(oldProduct: Product, dialogView: View) {
@@ -453,14 +399,12 @@ class HomeFragment : Fragment() {
             type = type,
             category = category,
             amount = amount,
-            date = selectedDate,
+            date = viewModel.selectedDate.value,
             comment = comment
         )
 
-        lifecycleScope.launch {
-            repository.update(updatedProduct)
-            Toast.makeText(requireContext(), "Запись обновлена", Toast.LENGTH_SHORT).show()
-        }
+        viewModel.updateProduct(updatedProduct)
+        Toast.makeText(requireContext(), "Запись обновлена", Toast.LENGTH_SHORT).show()
     }
 
     private fun showDeleteConfirmationDialog(product: Product) {
@@ -468,17 +412,12 @@ class HomeFragment : Fragment() {
             .setTitle("Удаление")
             .setMessage("Удалить запись?")
             .setPositiveButton("Удалить") { d, _ ->
-                deleteProduct(product); d.dismiss()
+                viewModel.deleteProduct(product)
+                Toast.makeText(requireContext(), "Запись удалена", Toast.LENGTH_SHORT).show()
+                d.dismiss()
             }
             .setNegativeButton("Отмена") { d, _ -> d.dismiss() }
             .show()
-    }
-
-    private fun deleteProduct(product: Product) {
-        lifecycleScope.launch {
-            repository.delete(product)
-            Toast.makeText(requireContext(), "Запись удалена", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun showDateSelectionDialog() {
@@ -508,7 +447,7 @@ class HomeFragment : Fragment() {
         }
 
         dateFromText = TextView(requireContext()).apply {
-            text = formatDate(startDate)
+            text = viewModel.formatDate(viewModel.startDate.value)
             textSize = 16f
             setPadding(10, 10, 10, 10)
             background = android.graphics.drawable.GradientDrawable().apply {
@@ -528,7 +467,7 @@ class HomeFragment : Fragment() {
         }
 
         dateToText = TextView(requireContext()).apply {
-            text = formatDate(endDate)
+            text = viewModel.formatDate(viewModel.endDate.value)
             textSize = 16f
             setPadding(10, 10, 10, 10)
             background = android.graphics.drawable.GradientDrawable().apply {
@@ -557,7 +496,7 @@ class HomeFragment : Fragment() {
                 weight = 1f; marginEnd = 5
             }
             setOnClickListener {
-                resetDateFilter()
+                viewModel.resetDateFilter()
                 dateSelectionDialog?.dismiss()
             }
         }
@@ -582,7 +521,6 @@ class HomeFragment : Fragment() {
                 weight = 1f; marginStart = 5
             }
             setOnClickListener {
-                applyDateFilter()
                 dateSelectionDialog?.dismiss()
             }
         }
@@ -600,21 +538,20 @@ class HomeFragment : Fragment() {
     }
 
     private fun showDatePicker(isStart: Boolean) {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = if (isStart && startDate != 0L) startDate else endDate
-        }
+        val initial = if (isStart) viewModel.startDate.value else viewModel.endDate.value
+
+        val calendar = Calendar.getInstance().apply { timeInMillis = initial }
 
         DatePickerDialog(
             requireContext(),
             { _, year, month, day ->
                 val newDate = Calendar.getInstance().apply { set(year, month, day) }.timeInMillis
-
                 if (isStart) {
-                    startDate = newDate
-                    dateFromText.text = formatDate(startDate)
+                    viewModel.updateStartDate(newDate)
+                    dateFromText.text = viewModel.formatDate(newDate)
                 } else {
-                    endDate = newDate
-                    dateToText.text = formatDate(endDate)
+                    viewModel.updateEndDate(newDate)
+                    dateToText.text = viewModel.formatDate(newDate)
                 }
             },
             calendar.get(Calendar.YEAR),
