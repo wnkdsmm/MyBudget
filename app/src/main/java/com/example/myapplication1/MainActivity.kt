@@ -8,7 +8,6 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.Spinner
@@ -33,17 +32,18 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private var selectedDate = System.currentTimeMillis() // по умолчанию сегодня
+    private var selectedDate = System.currentTimeMillis()
+
+    private val productRepository by lazy { (application as BudgetApp).repository }
+    private val categoryRepository by lazy { (application as BudgetApp).categoryRepository }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
         Firebase.initialize(this)
+
         lifecycleScope.launch {
-            resetMigrationForDebug()
+            MigrationUtils.migrateRoomToFirestore(this@MainActivity)
         }
-
-
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -67,10 +67,12 @@ class MainActivity : AppCompatActivity() {
             showAddProductDialog()
         }
     }
+
     private suspend fun resetMigrationForDebug() {
         MigrationUtils.resetMigration(this)
         Log.d("MainActivity", "Флаг миграции сброшен")
     }
+
     private fun showAddProductDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_product, null)
 
@@ -80,23 +82,18 @@ class MainActivity : AppCompatActivity() {
         val editTextComment = dialogView.findViewById<EditText>(R.id.edit_text_comment)
         val editTextDate = dialogView.findViewById<EditText>(R.id.edit_text_date)
 
-        // Инициализация даты (сегодня)
         selectedDate = System.currentTimeMillis()
         updateDateText(editTextDate)
 
-        // Инициализация спиннера
-        updateCategoriesSpinner(spinnerCategory, false)
+        // Первичная загрузка категорий (расход по умолчанию)
+        loadCategoriesIntoSpinner(spinnerCategory, isIncome = false)
 
-        // Обработка смены типа (доход/расход)
         radioGroupType.setOnCheckedChangeListener { _, checkedId ->
-            updateCategoriesSpinner(spinnerCategory, checkedId == R.id.radio_income)
+            val isIncome = checkedId == R.id.radio_income
+            loadCategoriesIntoSpinner(spinnerCategory, isIncome)
         }
 
-        // Обработка клика на поле даты
-        editTextDate.setOnClickListener {
-            showDatePicker(editTextDate)
-        }
-
+        editTextDate.setOnClickListener { showDatePicker(editTextDate) }
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("Добавить запись")
@@ -105,56 +102,56 @@ class MainActivity : AppCompatActivity() {
                 saveProductFromDialog(dialogView)
                 dialog.dismiss()
             }
-            .setNegativeButton("Отмена") { dialog, _ ->
-                dialog.dismiss()
-            }
+            .setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
             .create()
 
         dialog.show()
     }
 
     private fun showDatePicker(editTextDate: EditText) {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = selectedDate
-        }
-
-        val year = calendar.get(Calendar.YEAR)
-        val month = calendar.get(Calendar.MONTH)
-        val day = calendar.get(Calendar.DAY_OF_MONTH)
+        val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
 
         val datePicker = DatePickerDialog(
             this,
-            { _, selectedYear, selectedMonth, selectedDay ->
+            { _, year, month, day ->
                 val newCalendar = Calendar.getInstance().apply {
-                    set(selectedYear, selectedMonth, selectedDay)
+                    set(year, month, day)
                 }
                 selectedDate = newCalendar.timeInMillis
                 updateDateText(editTextDate)
             },
-            year,
-            month,
-            day
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
         )
-
         datePicker.show()
     }
 
     private fun updateDateText(editTextDate: EditText) {
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-        val dateString = dateFormat.format(Date(selectedDate))
+        val dateString = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+            .format(Date(selectedDate))
         editTextDate.setText(dateString)
     }
 
-    private fun updateCategoriesSpinner(spinner: Spinner, isIncome: Boolean) {
-        val categories = if (isIncome) {
-            Categories.incomeCategories
-        } else {
-            Categories.expenseCategories
-        }
+    /** Загружает категории из базы и обновляет Spinner */
+    private fun loadCategoriesIntoSpinner(spinner: Spinner, isIncome: Boolean) {
+        val type = if (isIncome) "income" else "expense"
 
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, categories)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
+        lifecycleScope.launch {
+            val categories = categoryRepository.getCategoriesByType(type)
+
+            if (categories.isEmpty()) {
+                Log.w("MainActivity", "Категории ($type) не найдены в БД")
+            }
+
+            val adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_item,
+                categories
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
     }
 
     private fun saveProductFromDialog(dialogView: View) {
@@ -163,36 +160,27 @@ class MainActivity : AppCompatActivity() {
         val editTextAmount = dialogView.findViewById<EditText>(R.id.edit_text_amount)
         val editTextComment = dialogView.findViewById<EditText>(R.id.edit_text_comment)
 
-        val amountText = editTextAmount.text.toString()
-        if (amountText.isEmpty()) {
-            Toast.makeText(this, "Введите сумму", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val amount = amountText.toDoubleOrNull()
+        val amount = editTextAmount.text.toString().toDoubleOrNull()
         if (amount == null || amount <= 0) {
             Toast.makeText(this, "Введите корректную сумму", Toast.LENGTH_SHORT).show()
             return
         }
 
         val type = if (radioGroupType.checkedRadioButtonId == R.id.radio_income) "income" else "expense"
-        val category = spinnerCategory.selectedItem as String
+        val category = spinnerCategory.selectedItem as? String ?: ""
         val comment = editTextComment.text.toString()
 
         val product = Product(
             type = type,
             category = category,
             amount = amount,
-            date = selectedDate, // используем выбранную дату
+            date = selectedDate,
             comment = comment
         )
 
-        // Сохраняем в базу данных
         lifecycleScope.launch {
-            val repository = (application as BudgetApp).repository
-            repository.insert(product)
+            productRepository.insert(product)
             Toast.makeText(this@MainActivity, "Запись добавлена", Toast.LENGTH_SHORT).show()
         }
-
     }
 }

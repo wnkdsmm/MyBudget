@@ -27,44 +27,44 @@ object MigrationUtils {
 
             // Получаем репозитории
             val app = context.applicationContext as BudgetApp
-            val roomRepository = app.repository
+            // val roomRepository = app.repository
             val firestoreRepository = ProductFirestoreRepository()
 
             // Получаем все локальные продукты
-            val localProducts = roomRepository.allProducts.first()
-            Log.d(TAG, "Найдено ${localProducts.size} продуктов для миграции")
+            // val localProducts = roomRepository.allProducts.first()
+            // Log.d(TAG, "Найдено ${localProducts.size} продуктов для миграции")
 
-            if (localProducts.isEmpty()) {
-                Log.d(TAG, "Нет данных для миграции")
-                markMigrationComplete(prefs)
-                return
-            }
+//            if (localProducts.isEmpty()) {
+//                Log.d(TAG, "Нет данных для миграции")
+//                markMigrationComplete(prefs)
+//                return
+//            }
 
             // Отправляем в Firestore
             var successCount = 0
             var errorCount = 0
 
-            localProducts.forEachIndexed { index, product ->
-                try {
-                    Log.d(TAG, "Миграция продукта ${index + 1}/${localProducts.size}: ID=${product.id}, Дата=${product.date}")
-
-                    // Создаем копию продукта с корректным ID для Firestore
-                    val productForFirestore = Product(
-                        id = product.id,
-                        type = product.type,
-                        category = product.category,
-                        amount = product.amount,
-                        date = product.date,
-                        comment = product.comment
-                    )
-
-                    firestoreRepository.insertProduct(productForFirestore)
-                    successCount++
-                } catch (e: Exception) {
-                    errorCount++
-                    Log.e(TAG, "Ошибка при миграции продукта ${product.id}: ${e.message}", e)
-                }
-            }
+//            localProducts.forEachIndexed { index, product ->
+//                try {
+//                    Log.d(TAG, "Миграция продукта ${index + 1}/${localProducts.size}: ID=${product.id}, Дата=${product.date}")
+//
+//                    // Создаем копию продукта с корректным ID для Firestore
+//                    val productForFirestore = Product(
+//                        id = product.id,
+//                        type = product.type,
+//                        category = product.category,
+//                        amount = product.amount,
+//                        date = product.date,
+//                        comment = product.comment
+//                    )
+//
+//                    firestoreRepository.insertProduct(productForFirestore)
+//                    successCount++
+//                } catch (e: Exception) {
+//                    errorCount++
+//                    Log.e(TAG, "Ошибка при миграции продукта ${product.id}: ${e.message}", e)
+//                }
+//            }
 
             Log.d(TAG, "Миграция завершена: успешно $successCount, ошибок $errorCount")
 
