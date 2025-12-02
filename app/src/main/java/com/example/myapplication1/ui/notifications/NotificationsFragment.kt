@@ -62,8 +62,7 @@ class NotificationsFragment : Fragment() {
             text = "+ Добавить новую категорию"
             textSize = 16f
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#FF9800"))
+
             setPadding(0, 20, 0, 20)
             setOnClickListener { showAddCategoryDialog() }
 

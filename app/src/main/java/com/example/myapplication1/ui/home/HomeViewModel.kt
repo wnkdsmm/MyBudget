@@ -14,65 +14,38 @@ class HomeViewModel(
     private val repository: ProductRepository
 ) : ViewModel() {
 
-    private val _startDate = MutableStateFlow(0L)
-    val startDate: StateFlow<Long> = _startDate
+    private val _products = MutableStateFlow<List<Product>>(emptyList())
+    val products: StateFlow<List<Product>> get() = _products
 
-    private val _endDate = MutableStateFlow(System.currentTimeMillis())
-    val endDate: StateFlow<Long> = _endDate
+    private var startDate: Long = 0L
+    private var endDate: Long = System.currentTimeMillis()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    private val _selectedDate = MutableStateFlow(System.currentTimeMillis())
-    val selectedDate: StateFlow<Long> = _selectedDate
+    val filteredProducts: StateFlow<List<Product>> = combine(_products, _searchQuery) { list, query ->
+        applyFilters(list, query)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val products: StateFlow<List<Product>> = repository.allProducts.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        emptyList()
-    )
-
-    val filteredProducts: StateFlow<List<Product>> =
-        combine(products, _startDate, _endDate, _searchQuery) { list, start, end, query ->
-            applyFilters(list, start, end, query)
-        }.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
-    fun updateSearch(query: String) {
-        _searchQuery.value = query
+    init {
+        refreshProducts()
     }
 
-    fun updateStartDate(value: Long) {
-        _startDate.value = value
+    private fun refreshProducts() {
+        viewModelScope.launch {
+            repository.allProducts.collect { list ->
+                _products.value = filterProductsByDate(list)
+            }
+        }
     }
 
-    fun updateEndDate(value: Long) {
-        _endDate.value = value
+    private fun filterProductsByDate(products: List<Product>): List<Product> {
+        return if (startDate == 0L) products.filter { it.date <= endDate }
+        else products.filter { it.date in startDate..endDate }
     }
 
-    fun resetDateFilter() {
-        _startDate.value = 0L
-        _endDate.value = System.currentTimeMillis()
-    }
-
-    fun setSelectedDate(value: Long) {
-        _selectedDate.value = value
-    }
-
-    private fun applyFilters(
-        list: List<Product>,
-        start: Long,
-        end: Long,
-        query: String
-    ): List<Product> {
-
-        val dateFiltered = if (start == 0L) {
-            list.filter { it.date <= end }
-        } else list.filter { it.date in start..end }
-
+    private fun applyFilters(list: List<Product>, query: String): List<Product> {
+        val dateFiltered = filterProductsByDate(list)
         return if (query.isNotBlank()) {
             dateFiltered.filter {
                 it.category.contains(query, ignoreCase = true) ||
@@ -81,16 +54,32 @@ class HomeViewModel(
         } else dateFiltered
     }
 
+    fun updateSearch(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun updateStartDate(timestamp: Long) {
+        startDate = timestamp
+        refreshProducts()
+    }
+
+    fun updateEndDate(timestamp: Long) {
+        endDate = timestamp
+        refreshProducts()
+    }
+
+    fun resetDateFilter() {
+        startDate = 0L
+        endDate = System.currentTimeMillis()
+        refreshProducts()
+    }
+
     fun updateProduct(product: Product) {
-        viewModelScope.launch {
-            repository.update(product)
-        }
+        viewModelScope.launch { repository.update(product) }
     }
 
     fun deleteProduct(product: Product) {
-        viewModelScope.launch {
-            repository.delete(product)
-        }
+        viewModelScope.launch { repository.delete(product) }
     }
 
     fun formatDate(timestamp: Long): String {

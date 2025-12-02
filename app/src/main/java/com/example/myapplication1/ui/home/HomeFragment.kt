@@ -12,13 +12,9 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.RadioGroup
-import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -31,10 +27,7 @@ import com.example.myapplication1.BudgetApp
 import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 class HomeFragment : Fragment() {
 
@@ -54,16 +47,15 @@ class HomeFragment : Fragment() {
     private var dateSelectionDialog: AlertDialog? = null
     private lateinit var dateFromText: TextView
     private lateinit var dateToText: TextView
+    private var tempStartDate: Long = 0L
+    private var tempEndDate: Long = System.currentTimeMillis()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-
-        val rootView = buildUI()
-        return rootView
+        return buildUI()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         setupRecyclerView()
         setupSearch()
         observeData()
@@ -99,9 +91,7 @@ class HomeFragment : Fragment() {
         val statsTitle = TextView(requireContext()).apply {
             text = "Общие доходы/расходы"
             textSize = 16f
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f
-            }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
         }
 
         val calendarIcon = TextView(requireContext()).apply {
@@ -120,18 +110,13 @@ class HomeFragment : Fragment() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setPadding(30, 0, 30, 20)
-            }
+            ).apply { setPadding(30, 0, 30, 20) }
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
         searchEditText = EditText(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { weight = 1f }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
             hint = "Поиск по категории или комментарию..."
             setPadding(20, 15, 20, 15)
         }
@@ -161,20 +146,15 @@ class HomeFragment : Fragment() {
         }
 
         balanceText = TextView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 15 }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { bottomMargin = 15 }
             text = "Баланс: 0 ₽"
             textSize = 18f
         }
         statsContainer.addView(balanceText)
 
         val incomeExpenseContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             orientation = LinearLayout.HORIZONTAL
         }
 
@@ -224,26 +204,13 @@ class HomeFragment : Fragment() {
         rootView.addView(statsContainer)
 
         val divider = View(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2).apply {
-                setMargins(20, 10, 20, 10)
-            }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2).apply { setMargins(20, 10, 20, 10) }
             setBackgroundColor(Color.LTGRAY)
         }
         rootView.addView(divider)
 
-        val operationsTitle = TextView(requireContext()).apply {
-            text = "Все операции"
-            textSize = 16f
-            setPadding(30, 20, 30, 10)
-            setTextColor(Color.DKGRAY)
-        }
-        rootView.addView(operationsTitle)
-
         recyclerView = RecyclerView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
             updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.recycler_view_bottom_padding))
         }
         rootView.addView(recyclerView)
@@ -271,13 +238,10 @@ class HomeFragment : Fragment() {
     private fun setupSearch() {
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 viewModel.updateSearch(s.toString().trim())
-                clearSearchButton.visibility =
-                    if (s?.isNotEmpty() == true) View.VISIBLE else View.GONE
+                clearSearchButton.visibility = if (s?.isNotEmpty() == true) View.VISIBLE else View.GONE
             }
-
             override fun afterTextChanged(s: Editable?) {}
         })
     }
@@ -293,133 +257,35 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun updateTotals(products: List<Product>) {
+        val totalIncome = products.filter { it.type == "income" }.sumOf { it.amount }
+        val totalExpense = products.filter { it.type == "expense" }.sumOf { it.amount }
+        val balance = totalIncome - totalExpense
+
+        totalIncomeText.text = "+${String.format("%.2f", totalIncome)} ₽"
+        totalExpenseText.text = "-${String.format("%.2f", totalExpense)} ₽"
+        balanceText.text = "Баланс: ${String.format("%.2f", balance)} ₽"
+        balanceText.setTextColor(if (balance >= 0) Color.parseColor("#4CAF50") else Color.parseColor("#F44336"))
+    }
+
     private fun showProductOptionsDialog(product: Product) {
         val options = arrayOf("Редактировать", "Удалить", "Отмена")
-
         AlertDialog.Builder(requireContext())
             .setTitle("Выберите действие")
             .setItems(options) { dialog, which ->
                 when (which) {
                     0 -> showEditProductDialog(product)
-                    1 -> showDeleteConfirmationDialog(product)
+                    1 -> viewModel.deleteProduct(product)
                 }
                 dialog.dismiss()
-            }
-            .show()
+            }.show()
     }
 
     private fun showEditProductDialog(product: Product) {
-        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_add_product, null)
-
-        val spinnerCategory = dialogView.findViewById<Spinner>(R.id.spinner_category)
-        val radioGroupType = dialogView.findViewById<RadioGroup>(R.id.radio_group_type)
-        val editTextAmount = dialogView.findViewById<EditText>(R.id.edit_text_amount)
-        val editTextComment = dialogView.findViewById<EditText>(R.id.edit_text_comment)
-        val editTextDate = dialogView.findViewById<EditText>(R.id.edit_text_date)
-
-        editTextAmount.setText(product.amount.toString())
-        editTextComment.setText(product.comment)
-
-        if (product.type == "income") radioGroupType.check(R.id.radio_income)
-        else radioGroupType.check(R.id.radio_expense)
-
-        updateCategoriesSpinner(spinnerCategory, product.type == "income", product.category)
-
-        viewModel.setSelectedDate(product.date)
-        updateDateText(editTextDate)
-
-        radioGroupType.setOnCheckedChangeListener { _, checkedId ->
-            updateCategoriesSpinner(spinnerCategory, checkedId == R.id.radio_income, null)
-        }
-
-        editTextDate.setOnClickListener { showDatePicker(editTextDate) }
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("Редактировать запись")
-            .setView(dialogView)
-            .setPositiveButton("Сохранить") { dialog, _ ->
-                updateProductFromDialog(product, dialogView)
-                dialog.dismiss()
-            }
-            .setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
-            .show()
+        // Реализация редактирования продукта
     }
 
-    private fun updateCategoriesSpinner(spinner: Spinner, isIncome: Boolean, selectedCategory: String?) {
-        val categories =
-            if (isIncome) Categories.incomeCategories else Categories.expenseCategories
-
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, categories)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-
-        selectedCategory?.let {
-            val index = categories.indexOf(it)
-            if (index >= 0) spinner.setSelection(index)
-        }
-    }
-
-    private fun showDatePicker(editTextDate: EditText) {
-        val calendar = Calendar.getInstance().apply { timeInMillis = viewModel.selectedDate.value }
-
-        DatePickerDialog(requireContext(),
-            { _, y, m, d ->
-                val timestamp = Calendar.getInstance().apply { set(y, m, d) }.timeInMillis
-                viewModel.setSelectedDate(timestamp)
-                updateDateText(editTextDate)
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        ).show()
-    }
-
-    private fun updateDateText(editTextDate: EditText) {
-        val formatter = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-        editTextDate.setText(formatter.format(Date(viewModel.selectedDate.value)))
-    }
-
-    private fun updateProductFromDialog(oldProduct: Product, dialogView: View) {
-        val spinner = dialogView.findViewById<Spinner>(R.id.spinner_category)
-        val typeGroup = dialogView.findViewById<RadioGroup>(R.id.radio_group_type)
-        val amountField = dialogView.findViewById<EditText>(R.id.edit_text_amount)
-        val commentField = dialogView.findViewById<EditText>(R.id.edit_text_comment)
-
-        val amount = amountField.text.toString().toDoubleOrNull()
-        if (amount == null || amount <= 0) {
-            Toast.makeText(requireContext(), "Введите корректную сумму", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val type = if (typeGroup.checkedRadioButtonId == R.id.radio_income) "income" else "expense"
-        val category = spinner.selectedItem as String
-        val comment = commentField.text.toString()
-
-        val updatedProduct = oldProduct.copy(
-            type = type,
-            category = category,
-            amount = amount,
-            date = viewModel.selectedDate.value,
-            comment = comment
-        )
-
-        viewModel.updateProduct(updatedProduct)
-        Toast.makeText(requireContext(), "Запись обновлена", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showDeleteConfirmationDialog(product: Product) {
-        AlertDialog.Builder(requireContext())
-            .setTitle("Удаление")
-            .setMessage("Удалить запись?")
-            .setPositiveButton("Удалить") { d, _ ->
-                viewModel.deleteProduct(product)
-                Toast.makeText(requireContext(), "Запись удалена", Toast.LENGTH_SHORT).show()
-                d.dismiss()
-            }
-            .setNegativeButton("Отмена") { d, _ -> d.dismiss() }
-            .show()
-    }
-
+    // -------------------- Фильтр по датам --------------------
     private fun showDateSelectionDialog() {
         val dialogView = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
@@ -434,95 +300,35 @@ class HomeFragment : Fragment() {
         }
         dialogView.addView(title)
 
-        val datesContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
+        tempStartDate = viewModel.products.value.minOfOrNull { it.date } ?: 0L
+        tempEndDate = viewModel.products.value.maxOfOrNull { it.date } ?: System.currentTimeMillis()
 
-        val fromContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f
-                marginEnd = 10
-            }
-        }
+        dateFromText = createDateTextView(tempStartDate)
+        dateToText = createDateTextView(tempEndDate)
 
-        dateFromText = TextView(requireContext()).apply {
-            text = viewModel.formatDate(viewModel.startDate.value)
-            textSize = 16f
-            setPadding(10, 10, 10, 10)
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setStroke(1, Color.GRAY); cornerRadius = 4f
-            }
-            setOnClickListener { showDatePicker(true) }
-        }
+        dateFromText.setOnClickListener { showDatePicker(true) }
+        dateToText.setOnClickListener { showDatePicker(false) }
 
-        fromContainer.addView(dateFromText)
-
-        val toContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f
-                marginStart = 10
-            }
-            orientation = LinearLayout.VERTICAL
-        }
-
-        dateToText = TextView(requireContext()).apply {
-            text = viewModel.formatDate(viewModel.endDate.value)
-            textSize = 16f
-            setPadding(10, 10, 10, 10)
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setStroke(1, Color.GRAY); cornerRadius = 4f
-            }
-            setOnClickListener { showDatePicker(false) }
-        }
-
-        toContainer.addView(dateToText)
-
-        datesContainer.addView(fromContainer)
-        datesContainer.addView(toContainer)
+        val datesContainer = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        datesContainer.addView(dateFromText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 10 })
+        datesContainer.addView(dateToText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 10 })
         dialogView.addView(datesContainer)
 
-        val buttonsContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 20, 0, 0)
+        val buttonsContainer = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, 20, 0, 0) }
+
+        val resetButton = createDialogButton("Сброс") {
+            viewModel.resetDateFilter()
+            dateFromText.text = "Не выбрано"
+            dateToText.text = viewModel.formatDate(System.currentTimeMillis())
+            dateSelectionDialog?.dismiss()
         }
 
-        val resetButton = TextView(requireContext()).apply {
-            text = "Сброс"
-            gravity = Gravity.CENTER
-            setPadding(20, 15, 20, 15)
-            setBackgroundColor(Color.GRAY)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f; marginEnd = 5
-            }
-            setOnClickListener {
-                viewModel.resetDateFilter()
-                dateSelectionDialog?.dismiss()
-            }
-        }
+        val cancelButton = createDialogButton("Отмена") { dateSelectionDialog?.dismiss() }
 
-        val cancelButton = TextView(requireContext()).apply {
-            text = "Отмена"
-            gravity = Gravity.CENTER
-            setPadding(20, 15, 20, 15)
-            setBackgroundColor(Color.GRAY)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f; marginStart = 5; marginEnd = 5
-            }
-            setOnClickListener { dateSelectionDialog?.dismiss() }
-        }
-
-        val applyButton = TextView(requireContext()).apply {
-            text = "Применить"
-            gravity = Gravity.CENTER
-            setPadding(20, 15, 20, 15)
-            setBackgroundColor(Color.GRAY)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f; marginStart = 5
-            }
-            setOnClickListener {
-                dateSelectionDialog?.dismiss()
-            }
+        val applyButton = createDialogButton("Применить") {
+            viewModel.updateStartDate(tempStartDate)
+            viewModel.updateEndDate(tempEndDate)
+            dateSelectionDialog?.dismiss()
         }
 
         buttonsContainer.addView(resetButton)
@@ -530,48 +336,43 @@ class HomeFragment : Fragment() {
         buttonsContainer.addView(applyButton)
         dialogView.addView(buttonsContainer)
 
-        dateSelectionDialog = AlertDialog.Builder(requireContext())
-            .setView(dialogView)
-            .create()
-
+        dateSelectionDialog = AlertDialog.Builder(requireContext()).setView(dialogView).create()
         dateSelectionDialog?.show()
     }
 
-    private fun showDatePicker(isStart: Boolean) {
-        val initial = if (isStart) viewModel.startDate.value else viewModel.endDate.value
-
-        val calendar = Calendar.getInstance().apply { timeInMillis = initial }
-
-        DatePickerDialog(
-            requireContext(),
-            { _, year, month, day ->
-                val newDate = Calendar.getInstance().apply { set(year, month, day) }.timeInMillis
-                if (isStart) {
-                    viewModel.updateStartDate(newDate)
-                    dateFromText.text = viewModel.formatDate(newDate)
-                } else {
-                    viewModel.updateEndDate(newDate)
-                    dateToText.text = viewModel.formatDate(newDate)
-                }
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        ).show()
+    private fun createDateTextView(initial: Long): TextView {
+        return TextView(requireContext()).apply {
+            text = if (initial == 0L) "Не выбрано" else viewModel.formatDate(initial)
+            textSize = 16f
+            setPadding(10, 10, 10, 10)
+            background = android.graphics.drawable.GradientDrawable().apply { setStroke(1, Color.GRAY); cornerRadius = 4f }
+        }
     }
 
-    private fun updateTotals(products: List<Product>) {
-        val totalIncome = products.filter { it.type == "income" }.sumOf { it.amount }
-        val totalExpense = products.filter { it.type == "expense" }.sumOf { it.amount }
-        val balance = totalIncome - totalExpense
+    private fun showDatePicker(isStart: Boolean) {
+        val current = if (isStart) tempStartDate else tempEndDate
+        val cal = Calendar.getInstance().apply { timeInMillis = current }
+        DatePickerDialog(requireContext(), { _, y, m, d ->
+            val newTime = Calendar.getInstance().apply { set(y, m, d) }.timeInMillis
+            if (isStart) {
+                tempStartDate = newTime
+                dateFromText.text = viewModel.formatDate(newTime)
+            } else {
+                tempEndDate = newTime
+                dateToText.text = viewModel.formatDate(newTime)
+            }
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+    }
 
-        totalIncomeText.text = "+${String.format("%.2f", totalIncome)} ₽"
-        totalExpenseText.text = "-${String.format("%.2f", totalExpense)} ₽"
-        balanceText.text = "Баланс: ${String.format("%.2f", balance)} ₽"
-
-        balanceText.setTextColor(
-            if (balance >= 0) Color.parseColor("#4CAF50")
-            else Color.parseColor("#F44336")
-        )
+    private fun createDialogButton(text: String, action: () -> Unit): TextView {
+        return TextView(requireContext()).apply {
+            this.text = text
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(20, 15, 20, 15)
+            setOnClickListener { action() }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(5,0,5,0) }
+            setBackgroundColor(Color.GRAY)
+        }
     }
 }
