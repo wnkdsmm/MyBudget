@@ -1,40 +1,65 @@
+import com.example.myapplication1.ProductFirestoreRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.tasks.await
 
-class ProductRepository(private val productDao: ProductDao) {
+class ProductRepository(private val firestoreRepo: ProductFirestoreRepository = ProductFirestoreRepository()) {
 
-    val allProducts: Flow<List<Product>> = productDao.getAllProducts()
+    // Поток всех продуктов из Firestore
+    val allProducts: Flow<List<Product>> = flow {
+        while (true) {
+            emit(firestoreRepo.getAllProducts())
+            kotlinx.coroutines.delay(5000) // обновление каждые 5 секунд
+        }
+    }
 
+    // Вставка нового продукта
+    suspend fun insert(product: Product): Product {
+        firestoreRepo.insertProduct(product)
+        return product
+    }
 
-
+    // Обновление существующего продукта
     suspend fun update(product: Product) {
-        productDao.update(product)
+        firestoreRepo.insertProduct(product) // Firestore set() с существующим ID обновляет документ
     }
 
+    // Удаление продукта
     suspend fun delete(product: Product) {
-        productDao.delete(product)
+        try {
+            val docId = product.id.toString()
+            firestoreRepo.productsCollection.document(docId).delete().await()
+        } catch (e: Exception) {
+            throw e
+        }
     }
 
-    fun getProductsByType(type: String): Flow<List<Product>> {
-        return productDao.getProductsByType(type)
+    // Получение продуктов по типу
+    fun getProductsByType(type: String): Flow<List<Product>> = flow {
+        while (true) {
+            val filtered = firestoreRepo.getAllProducts().filter { it.type == type }
+            emit(filtered)
+            kotlinx.coroutines.delay(5000)
+        }
     }
 
+    // Получение общей суммы доходов
     suspend fun getTotalIncome(): Double {
-        return productDao.getTotalByType("income") ?: 0.0
+        return firestoreRepo.getAllProducts().filter { it.type == "income" }.sumOf { it.amount }
     }
 
+    // Получение общей суммы расходов
     suspend fun getTotalExpenses(): Double {
-        return productDao.getTotalByType("expense") ?: 0.0
+        return firestoreRepo.getAllProducts().filter { it.type == "expense" }.sumOf { it.amount }
     }
 
+    // Получение баланса
     suspend fun getBalance(): Double {
         return getTotalIncome() - getTotalExpenses()
     }
-    suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product> {
-        return productDao.getProductsByCategoryAndType(category, type)
-    }
 
-    suspend fun insert(product: Product): Product {
-        val id = productDao.insertReturnId(product)
-        return product.copy(id = id)
+    // Получение продуктов по категории и типу
+    suspend fun getProductsByCategoryAndType(category: String, type: String): List<Product> {
+        return firestoreRepo.getAllProducts().filter { it.type == type && it.category == category }
     }
 }

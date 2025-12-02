@@ -13,14 +13,19 @@ lifecycleViewmodelKtx = "2.10.0"
 mpandroidchart = "v3.1.0"
 navigationFragmentKtx = "2.9.6"
 navigationUiKtx = "2.9.6"
+firebase-bom = "33.1.0"
 
 roomRuntime = "2.8.3"
 lifecycleRuntimeKtx = "2.9.4"
 runtimeLivedata = "1.9.4"
 ksp = "2.1.10-1.0.31"
+firebaseFirestore = "26.0.2"
 
 
 [libraries]
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
+firebase-firestore = { module = "com.google.firebase:firebase-firestore-ktx" }
+
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -39,9 +44,10 @@ androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomRunt
 androidx-room-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomRuntime" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
 mpandroidchart = { module = "com.github.PhilJay:MPAndroidChart", version.ref = "mpandroidchart" }
+google-firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-
+google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
 devtoolsKsp = { id = "com.google.devtools.ksp", version.ref = "ksp"}

@@ -4,6 +4,7 @@ import Product
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ArrayAdapter
@@ -20,6 +21,9 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.example.myapplication1.databinding.ActivityMainBinding
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
+import com.google.firebase.initialize
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -32,7 +36,14 @@ class MainActivity : AppCompatActivity() {
     private var selectedDate = System.currentTimeMillis() // по умолчанию сегодня
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
+        Firebase.initialize(this)
+        lifecycleScope.launch {
+            resetMigrationForDebug()
+        }
+
+
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -56,7 +67,10 @@ class MainActivity : AppCompatActivity() {
             showAddProductDialog()
         }
     }
-
+    private suspend fun resetMigrationForDebug() {
+        MigrationUtils.resetMigration(this)
+        Log.d("MainActivity", "Флаг миграции сброшен")
+    }
     private fun showAddProductDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_product, null)
 
@@ -179,5 +193,7 @@ class MainActivity : AppCompatActivity() {
             repository.insert(product)
             Toast.makeText(this@MainActivity, "Запись добавлена", Toast.LENGTH_SHORT).show()
         }
+
     }
+
 }
