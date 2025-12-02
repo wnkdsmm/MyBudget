@@ -6,6 +6,8 @@ import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.graphics.Color
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -27,6 +29,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication1.BudgetApp
 import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -41,6 +44,8 @@ class HomeFragment : Fragment() {
     private lateinit var totalIncomeText: TextView
     private lateinit var totalExpenseText: TextView
     private lateinit var balanceText: TextView
+    private lateinit var searchEditText: EditText
+    private lateinit var clearSearchButton: TextView
 
     private var startDate: Long = 0L
     private var endDate: Long = System.currentTimeMillis()
@@ -49,6 +54,8 @@ class HomeFragment : Fragment() {
     private lateinit var dateToText: TextView
 
     private var selectedDate = System.currentTimeMillis()
+    private var searchQuery = ""
+    private var currentProducts: List<Product> = emptyList()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val rootView = LinearLayout(requireContext()).apply {
@@ -97,6 +104,45 @@ class HomeFragment : Fragment() {
         statsHeaderContainer.addView(statsTitle)
         statsHeaderContainer.addView(calendarIcon)
         rootView.addView(statsHeaderContainer)
+
+        // Добавляем поле поиска
+        val searchContainer = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setPadding(30, 0, 30, 20)
+            }
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        searchEditText = EditText(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                weight = 1f
+            }
+            hint = "Поиск по категории или комментарию..."
+            setPadding(20, 15, 20, 15)
+
+        }
+
+        clearSearchButton = TextView(requireContext()).apply {
+            text = "✕"
+            textSize = 18f
+            setPadding(15, 15, 15, 15)
+            visibility = View.GONE
+            setOnClickListener {
+                searchEditText.text.clear()
+                clearSearchButton.visibility = View.GONE
+            }
+        }
+
+        searchContainer.addView(searchEditText)
+        searchContainer.addView(clearSearchButton)
+        rootView.addView(searchContainer)
 
         val statsContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -204,6 +250,7 @@ class HomeFragment : Fragment() {
         repository = (requireActivity().application as BudgetApp).repository
 
         setupRecyclerView()
+        setupSearch()
         observeData()
     }
 
@@ -231,47 +278,70 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun setupSearch() {
+        // Настраиваем слушатель для поля поиска
+        searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchQuery = s.toString().trim()
+                clearSearchButton.visibility = if (searchQuery.isNotEmpty()) View.VISIBLE else View.GONE
+                applyFilters()
+            }
+
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
     private fun observeData() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 repository.allProducts.collect { products ->
-                    // Создаём новую копию списка, чтобы DiffUtil корректно обработал изменения
-                    val filtered = filterProductsByDate(products)
-                    adapter.submitList(filtered.map { it.copy() })  // copy() гарантирует новый объект
-                    updateTotals(filtered)
+                    currentProducts = products
+                    applyFilters()
                 }
             }
         }
     }
 
-    private fun filterProductsByDate(products: List<Product>): List<Product> {
-        return if (startDate == 0L) {
+    private fun applyFilters() {
+        val filtered = filterProducts(currentProducts)
+        adapter.submitList(filtered.map { it.copy() })
+        updateTotals(filtered)
+    }
+
+    private fun filterProducts(products: List<Product>): List<Product> {
+        // Сначала применяем фильтр по дате
+        val dateFiltered = if (startDate == 0L) {
             products.filter { it.date <= endDate }
         } else {
             products.filter { it.date in startDate..endDate }
         }
+
+        // Затем применяем поисковый запрос, если он есть
+        return if (searchQuery.isNotEmpty()) {
+            dateFiltered.filter { product ->
+                product.category.contains(searchQuery, ignoreCase = true) ||
+                        product.comment.contains(searchQuery, ignoreCase = true)
+            }
+        } else {
+            dateFiltered
+        }
     }
 
     private fun applyDateFilter() {
-        // Обновляем данные с учетом выбранного периода
-        viewLifecycleOwner.lifecycleScope.launch {
-            repository.allProducts.collect { products ->
-                val filtered = filterProductsByDate(products)
-                adapter.submitList(filtered.map { it.copy() })
-                updateTotals(filtered)
-            }
-        }
+        applyFilters()
     }
 
     private fun resetDateFilter() {
         startDate = 0L
         endDate = System.currentTimeMillis()
 
-        dateFromText?.let { it.text = "Не выбрано" }
+        dateFromText?.let { it.text = formatDate(startDate) }
         dateToText?.let { it.text = formatDate(endDate) }
 
         // Применяем сброс фильтра
-        applyDateFilter()
+        applyFilters()
     }
 
     private fun formatDate(timestamp: Long): String {
