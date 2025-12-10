@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -17,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -32,6 +34,7 @@ import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
 import com.example.myapplication1.ui.notifications.NotificationsViewModel
 import com.example.myapplication1.ui.notifications.NotificationsViewModelFactory
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -53,9 +56,9 @@ class HomeFragment : Fragment() {
     private lateinit var totalIncomeText: TextView
     private lateinit var totalExpenseText: TextView
     private lateinit var balanceText: TextView
+    private lateinit var searchTextInputLayout: TextInputLayout
     private lateinit var searchEditText: EditText
-    private lateinit var clearSearchButton: TextView
-    private lateinit var refreshButton: Button // Новая кнопка
+    private lateinit var refreshButton: Button
 
     private var dateSelectionDialog: AlertDialog? = null
     private lateinit var dateFromText: TextView
@@ -72,8 +75,13 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         setupSearch()
-        setupRefreshButton() // Инициализация кнопки обновления
+        setupRefreshButton()
         observeData()
+
+        // Назначаем обработчик кликов для корневого View
+        view.setOnClickListener {
+            hideKeyboardAndClearFocus()
+        }
     }
 
     private fun buildUI(): View {
@@ -84,6 +92,11 @@ class HomeFragment : Fragment() {
             )
             orientation = LinearLayout.VERTICAL
             updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.bottom_navigation_height))
+            // Делаем корневой View кликабельным, но не перехватывающим дочерние клики
+            setOnClickListener {
+                // Обработка клика по фону (вне полей ввода)
+            }
+            isClickable = true
         }
 
         val title = TextView(requireContext()).apply {
@@ -121,36 +134,43 @@ class HomeFragment : Fragment() {
         statsHeaderContainer.addView(calendarIcon)
         rootView.addView(statsHeaderContainer)
 
-        val searchContainer = LinearLayout(requireContext()).apply {
+        // Поиск в стиле TextInputLayout
+        searchTextInputLayout = TextInputLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setPadding(30, 0, 30, 20) }
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        searchEditText = EditText(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+            ).apply {
+                setPadding(30, 0, 30, 20)
+            }
             hint = "Поиск по категории или комментарию..."
-            setPadding(20, 15, 20, 15)
-        }
+            isHintEnabled = true
+            endIconMode = TextInputLayout.END_ICON_CLEAR_TEXT
+            endIconDrawable = context.getDrawable(com.google.android.material.R.drawable.mtrl_ic_cancel)
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            setEndIconTintList(null) // Оставляем стандартный цвет иконки
 
-        clearSearchButton = TextView(requireContext()).apply {
-            text = "✕"
-            textSize = 18f
-            setPadding(15, 15, 15, 15)
-            visibility = View.GONE
+            // Предотвращаем закрытие клавиатуры при клике на TextInputLayout
             setOnClickListener {
-                searchEditText.text.clear()
-                viewModel.updateSearch("")
-                clearSearchButton.visibility = View.GONE
+                searchEditText.requestFocus()
+                showKeyboard(searchEditText)
             }
         }
 
-        searchContainer.addView(searchEditText)
-        searchContainer.addView(clearSearchButton)
-        rootView.addView(searchContainer)
+        searchEditText = EditText(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            // Настраиваем обработку фокуса
+            setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) {
+                    hideKeyboard(this)
+                }
+            }
+        }
+
+        searchTextInputLayout.addView(searchEditText)
+        rootView.addView(searchTextInputLayout)
 
         val statsContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -158,6 +178,8 @@ class HomeFragment : Fragment() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setPadding(30, 0, 30, 20) }
             orientation = LinearLayout.VERTICAL
+            // Не перехватываем клики - пусть идут к родителю
+            isClickable = false
         }
 
         balanceText = TextView(requireContext()).apply {
@@ -217,7 +239,6 @@ class HomeFragment : Fragment() {
         incomeExpenseContainer.addView(expenseContainer)
         statsContainer.addView(incomeExpenseContainer)
 
-        // Кнопка обновления списка
         refreshButton = Button(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -226,7 +247,6 @@ class HomeFragment : Fragment() {
                 topMargin = 20
             }
             text = "🔄 Обновить список записей"
-
             gravity = Gravity.CENTER
             setPadding(20, 15, 20, 15)
             elevation = 4f
@@ -242,8 +262,20 @@ class HomeFragment : Fragment() {
         rootView.addView(divider)
 
         recyclerView = RecyclerView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
             updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.recycler_view_bottom_padding))
+
+            // Обработчик кликов для RecyclerView
+            addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+                override fun onInterceptTouchEvent(rv: RecyclerView, e: android.view.MotionEvent): Boolean {
+                    // При касании RecyclerView скрываем клавиатуру
+                    hideKeyboardAndClearFocus()
+                    return false // Позволяем обрабатывать клики дальше
+                }
+            })
         }
         rootView.addView(recyclerView)
 
@@ -258,18 +290,27 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupSearch() {
+        // Обработка ввода текста
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 viewModel.updateSearch(s.toString().trim())
-                clearSearchButton.visibility = if (s?.isNotEmpty() == true) View.VISIBLE else View.GONE
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+
+        // Обработка клика по иконке очистки
+        searchTextInputLayout.setEndIconOnClickListener {
+            searchEditText.text?.clear()
+            viewModel.updateSearch("")
+            searchEditText.requestFocus()
+            showKeyboard(searchEditText)
+        }
     }
 
     private fun setupRefreshButton() {
         refreshButton.setOnClickListener {
+            hideKeyboardAndClearFocus()
             refreshData()
         }
     }
@@ -278,7 +319,6 @@ class HomeFragment : Fragment() {
         // Сброс поиска
         searchEditText.text.clear()
         viewModel.updateSearch("")
-        clearSearchButton.visibility = View.GONE
 
         // Сброс фильтра по датам
         viewModel.resetDateFilter()
@@ -293,6 +333,40 @@ class HomeFragment : Fragment() {
                 Toast.makeText(requireContext(), "Список обновлён", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun hideKeyboardAndClearFocus() {
+        // Снимаем фокус с поля поиска
+        searchEditText.clearFocus()
+
+        // Скрываем клавиатуру
+        val inputMethodManager = ContextCompat.getSystemService(
+            requireContext(),
+            InputMethodManager::class.java
+        )
+        inputMethodManager?.hideSoftInputFromWindow(
+            searchEditText.windowToken,
+            0
+        )
+    }
+
+    private fun hideKeyboard(view: View) {
+        val inputMethodManager = ContextCompat.getSystemService(
+            requireContext(),
+            InputMethodManager::class.java
+        )
+        inputMethodManager?.hideSoftInputFromWindow(
+            view.windowToken,
+            0
+        )
+    }
+
+    private fun showKeyboard(view: View) {
+        val inputMethodManager = ContextCompat.getSystemService(
+            requireContext(),
+            InputMethodManager::class.java
+        )
+        inputMethodManager?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
     }
 
     private fun showRefreshNotification() {
@@ -331,7 +405,6 @@ class HomeFragment : Fragment() {
         }, 500)
     }
 
-
     private fun getBottomNavigationHeight(): Int {
         return try {
             val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
@@ -365,6 +438,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun showProductOptionsDialog(product: Product) {
+        hideKeyboardAndClearFocus()
         val options = arrayOf("Редактировать", "Удалить", "Отмена")
         AlertDialog.Builder(requireContext())
             .setTitle("Выберите действие")
@@ -378,6 +452,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun showEditProductDialog(product: Product) {
+        hideKeyboardAndClearFocus()
         val dialogView = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 30, 40, 20)
@@ -419,8 +494,9 @@ class HomeFragment : Fragment() {
                     val adapter = ArrayAdapter(
                         requireContext(),
                         android.R.layout.simple_spinner_dropdown_item,
-                        filtered.map { it.name }
+                        filtered.map { it.name }.sorted()
                     )
+
 
                     categorySpinner.adapter = adapter
 
@@ -457,6 +533,7 @@ class HomeFragment : Fragment() {
 
     // -------------------- Фильтр по датам --------------------
     private fun showDateSelectionDialog() {
+        hideKeyboardAndClearFocus()
         val dialogView = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 30, 40, 20)
@@ -479,12 +556,18 @@ class HomeFragment : Fragment() {
         dateFromText.setOnClickListener { showDatePicker(true) }
         dateToText.setOnClickListener { showDatePicker(false) }
 
-        val datesContainer = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val datesContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         datesContainer.addView(dateFromText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 10 })
         datesContainer.addView(dateToText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 10 })
         dialogView.addView(datesContainer)
 
-        val buttonsContainer = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, 20, 0, 0) }
+        val buttonsContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 20, 0, 0)
+        }
 
         val resetButton = createDialogButton("Сброс") {
             viewModel.resetDateFilter()
@@ -515,7 +598,10 @@ class HomeFragment : Fragment() {
             text = if (initial == 0L) "Не выбрано" else viewModel.formatDate(initial)
             textSize = 16f
             setPadding(10, 10, 10, 10)
-            background = android.graphics.drawable.GradientDrawable().apply { setStroke(1, Color.GRAY); cornerRadius = 4f }
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setStroke(1, Color.GRAY)
+                cornerRadius = 4f
+            }
         }
     }
 
@@ -541,9 +627,10 @@ class HomeFragment : Fragment() {
             gravity = Gravity.CENTER
             setPadding(20, 15, 20, 15)
             setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(5,0,5,0) }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(5, 0, 5, 0)
+            }
             setBackgroundColor(Color.GRAY)
         }
     }
-
 }

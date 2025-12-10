@@ -1,8 +1,8 @@
 package com.example.myapplication1.ui.notifications
 
-
 import android.app.AlertDialog
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -71,8 +71,10 @@ class NotificationsFragment : Fragment() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(30, 0, 30, 20) }
-            val border = android.graphics.drawable.GradientDrawable()
-            border.cornerRadius = 8f
+            val border = GradientDrawable().apply {
+                cornerRadius = 8f
+                setStroke(2, Color.LTGRAY)
+            }
             background = border
         }
         rootView.addView(addCategoryButton)
@@ -121,18 +123,17 @@ class NotificationsFragment : Fragment() {
         rootView.addView(divider)
         rootView.addView(expenseContainer)
 
-// Заглушка снизу
+        // Заглушка снизу
         val bottomSpacer = View(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                550 // подобрать под высоту нижнего меню
+                550
             )
         }
         rootView.addView(bottomSpacer)
 
         scrollView.addView(rootView)
         return scrollView
-
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -140,7 +141,6 @@ class NotificationsFragment : Fragment() {
         repository = (requireActivity().application as BudgetApp).repository
         categoryRepository = CategoryRepository()
 
-        // Подписка на изменения категорий через StateFlow
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 viewModel.categories.collectLatest { categories ->
@@ -158,52 +158,77 @@ class NotificationsFragment : Fragment() {
             expenseContainer.removeViews(1, expenseContainer.childCount - 1)
         }
 
-        categories.filter { it.type == "income" }.forEach {
-            incomeContainer.addView(createCategoryView(it))
-        }
-        categories.filter { it.type == "expense" }.forEach {
-            expenseContainer.addView(createCategoryView(it))
-        }
-    }
-
-    private fun createCategoryView(category: Category): View {
-        val layout = LinearLayout(requireContext()).apply {
+        // GridLayout для доходов
+        val incomeGrid = GridLayout(requireContext()).apply {
+            columnCount = 2
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 10 }
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(20, 15, 20, 15)
+            )
+        }
+        categories.filter { it.type == "income" }.forEach { category ->
+            incomeGrid.addView(createCategoryCard(category))
+        }
+        incomeContainer.addView(incomeGrid)
+
+        // GridLayout для расходов
+        val expenseGrid = GridLayout(requireContext()).apply {
+            columnCount = 2
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        categories.filter { it.type == "expense" }.forEach { category ->
+            expenseGrid.addView(createCategoryCard(category))
+        }
+        expenseContainer.addView(expenseGrid)
+    }
+
+    private fun createCategoryCard(category: Category): View {
+        val card = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(30, 40, 30, 40) // увеличена высота карточки
+            background = GradientDrawable().apply {
+                cornerRadius = 16f
+                setStroke(2, Color.LTGRAY)
+            }
+            elevation = 8f
+            layoutParams = GridLayout.LayoutParams().apply {
+                width = 0
+                height = LinearLayout.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins(10, 10, 10, 10)
+            }
+
+            setOnClickListener {
+                showCategoryOptionsDialog(category)
+            }
         }
 
         val nameView = TextView(requireContext()).apply {
             text = category.name
             textSize = 16f
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                weight = 1f
-            }
+            gravity = Gravity.CENTER
         }
-        layout.addView(nameView)
+        card.addView(nameView)
 
-        val editButton = TextView(requireContext()).apply {
-            text = "✏️"
-            textSize = 16f
-            setPadding(20, 10, 20, 10)
-            setOnClickListener { showEditCategoryDialog(category) }
-        }
-        layout.addView(editButton)
-
-        val deleteButton = TextView(requireContext()).apply {
-            text = "🗑️"
-            textSize = 16f
-            setPadding(20, 10, 20, 10)
-            setOnClickListener { showDeleteCategoryDialog(category) }
-        }
-        layout.addView(deleteButton)
-
-        return layout
+        return card
     }
+
+    private fun showCategoryOptionsDialog(category: Category) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(category.name)
+            .setItems(arrayOf("Редактировать", "Удалить")) { dialog, which ->
+                when (which) {
+                    0 -> showEditCategoryDialog(category)
+                    1 -> showDeleteCategoryDialog(category)
+                }
+            }
+            .show()
+    }
+
+
 
     private fun showAddCategoryDialog() {
         val dialogView = LinearLayout(requireContext()).apply {

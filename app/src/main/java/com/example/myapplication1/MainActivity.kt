@@ -41,9 +41,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         Firebase.initialize(this)
 
-        lifecycleScope.launch {
-            MigrationUtils.migrateRoomToFirestore(this@MainActivity)
-        }
+
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -144,7 +142,7 @@ class MainActivity : AppCompatActivity() {
             val adapter = ArrayAdapter(
                 this@MainActivity,
                 android.R.layout.simple_spinner_item,
-                categories
+                categories.sorted() // сортировка по алфавиту
             )
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinner.adapter = adapter
