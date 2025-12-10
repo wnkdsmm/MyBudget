@@ -283,11 +283,8 @@ class HomeFragment : Fragment() {
 
     private fun showRefreshNotification() {
         val notification = TextView(requireContext()).apply {
-            text = "✅ Список обновлен"
-            textSize = 14f
-            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(20, 10, 20, 10)
+            setPadding(10, 5, 10, 5)
             setBackgroundColor(Color.parseColor("#4CAF50"))
         }
 
