@@ -10,10 +10,13 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -23,9 +26,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication1.BudgetApp
+import com.example.myapplication1.CategoryRepository
 import com.example.myapplication1.Product
 import com.example.myapplication1.ProductAdapter
 import com.example.myapplication1.R
+import com.example.myapplication1.ui.notifications.NotificationsViewModel
+import com.example.myapplication1.ui.notifications.NotificationsViewModelFactory
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -35,7 +41,13 @@ class HomeFragment : Fragment() {
         val repo = (requireActivity().application as BudgetApp).repository
         HomeViewModelFactory(repo)
     }
-
+    private lateinit var categoryRepository: CategoryRepository
+    private val categoryViewModel: NotificationsViewModel by viewModels {
+        NotificationsViewModelFactory(
+            (requireActivity().application as BudgetApp).repository,
+            CategoryRepository()
+        )
+    }
     private lateinit var adapter: ProductAdapter
     private lateinit var recyclerView: RecyclerView
     private lateinit var totalIncomeText: TextView
@@ -50,6 +62,7 @@ class HomeFragment : Fragment() {
     private lateinit var dateToText: TextView
     private var tempStartDate: Long = 0L
     private var tempEndDate: Long = System.currentTimeMillis()
+    private var activeRefreshNotification: View? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return buildUI()
@@ -275,17 +288,25 @@ class HomeFragment : Fragment() {
             viewModel.filteredProducts.collect { products ->
                 adapter.submitList(products.map { it.copy() })
                 updateTotals(products)
-                // Показать краткое уведомление
-                showRefreshNotification()
+
+                // Показать Toast уведомление
+                Toast.makeText(requireContext(), "Список обновлён", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun showRefreshNotification() {
+        val root = requireView() as LinearLayout
+
+        // Удаляем предыдущее уведомление, если оно существует
+        activeRefreshNotification?.let { root.removeView(it) }
+
         val notification = TextView(requireContext()).apply {
+            text = "Список обновлён"
             gravity = Gravity.CENTER
             setPadding(10, 5, 10, 5)
             setBackgroundColor(Color.parseColor("#4CAF50"))
+            setTextColor(Color.WHITE)
         }
 
         val layoutParams = LinearLayout.LayoutParams(
@@ -295,16 +316,21 @@ class HomeFragment : Fragment() {
             setMargins(30, 10, 30, 10)
         }
 
-        // Добавляем уведомление над RecyclerView
-        val root = requireView() as LinearLayout
-        val dividerIndex = root.indexOfChild(root.findViewWithTag("divider") ?: root.getChildAt(root.childCount - 2))
-        root.addView(notification, dividerIndex + 1, layoutParams)
+        // Добавляем уведомление после заголовка и статистики
+        val insertIndex = 3 // 0 title, 1 header, 2 stats, 3 divider — после stats
+        root.addView(notification, insertIndex, layoutParams)
 
-        // Удаляем уведомление через 2 секунды
+        // Запоминаем текущее уведомление
+        activeRefreshNotification = notification
+
         notification.postDelayed({
             root.removeView(notification)
-        }, 2000)
+            if (activeRefreshNotification === notification) {
+                activeRefreshNotification = null
+            }
+        }, 500)
     }
+
 
     private fun getBottomNavigationHeight(): Int {
         return try {
@@ -363,10 +389,7 @@ class HomeFragment : Fragment() {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
 
-        val categoryEdit = EditText(requireContext()).apply {
-            hint = "Категория"
-            setText(product.category)
-        }
+        val categorySpinner = Spinner(requireContext())
 
         val commentEdit = EditText(requireContext()).apply {
             hint = "Комментарий"
@@ -374,22 +397,62 @@ class HomeFragment : Fragment() {
         }
 
         dialogView.addView(amountEdit)
-        dialogView.addView(categoryEdit)
+        dialogView.addView(categorySpinner)
         dialogView.addView(commentEdit)
 
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle("Редактировать запись")
             .setView(dialogView)
-            .setPositiveButton("Сохранить") { _, _ ->
-                val updatedProduct = product.copy(
+            .setPositiveButton("Сохранить", null) // обработаем вручную
+            .setNegativeButton("Отмена", null)
+            .create()
+
+        dialog.setOnShowListener {
+
+            // Подписка на категории
+            viewLifecycleOwner.lifecycleScope.launch {
+                categoryViewModel.categories.collect { categories ->
+
+                    // Фильтруем категории по типу записи (income/expense)
+                    val filtered = categories.filter { it.type == product.type }
+
+                    val adapter = ArrayAdapter(
+                        requireContext(),
+                        android.R.layout.simple_spinner_dropdown_item,
+                        filtered.map { it.name }
+                    )
+
+                    categorySpinner.adapter = adapter
+
+                    // Устанавливаем текущую категорию
+                    val index = filtered.indexOfFirst { it.name == product.category }
+                    categorySpinner.setSelection(if (index >= 0) index else 0)
+                }
+            }
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val filteredCategories =
+                    categoryViewModel.categories.value.filter { it.type == product.type }
+
+                if (filteredCategories.isEmpty()) {
+                    Toast.makeText(requireContext(), "Нет категорий для данного типа", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                val newCategory = filteredCategories[categorySpinner.selectedItemPosition].name
+
+                val updated = product.copy(
                     amount = amountEdit.text.toString().toDoubleOrNull() ?: product.amount,
-                    category = categoryEdit.text.toString(),
+                    category = newCategory,
                     comment = commentEdit.text.toString()
                 )
-                viewModel.updateProduct(updatedProduct)
+
+                viewModel.updateProduct(updated)
+                dialog.dismiss()
             }
-            .setNegativeButton("Отмена", null)
-            .show()
+        }
+
+        dialog.show()
     }
 
     // -------------------- Фильтр по датам --------------------
@@ -482,4 +545,5 @@ class HomeFragment : Fragment() {
             setBackgroundColor(Color.GRAY)
         }
     }
+
 }

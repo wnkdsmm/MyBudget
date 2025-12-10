@@ -28,9 +28,12 @@ class NotificationsViewModel(
     // Обновление списка категорий
     private fun refreshCategories() {
         viewModelScope.launch {
-            _categories.value = categoryRepository.getAllCategories()
+            _categories.value = categoryRepository
+                .getAllCategories()
+                .sortedBy { it.name.lowercase() }
         }
     }
+
 
     // Добавление новой категории
     fun addCategory(category: Category, onComplete: () -> Unit) {

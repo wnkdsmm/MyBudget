@@ -121,8 +121,18 @@ class NotificationsFragment : Fragment() {
         rootView.addView(divider)
         rootView.addView(expenseContainer)
 
+// Заглушка снизу
+        val bottomSpacer = View(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                550 // подобрать под высоту нижнего меню
+            )
+        }
+        rootView.addView(bottomSpacer)
+
         scrollView.addView(rootView)
         return scrollView
+
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

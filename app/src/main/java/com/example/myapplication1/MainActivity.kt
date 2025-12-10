@@ -68,10 +68,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun resetMigrationForDebug() {
-        MigrationUtils.resetMigration(this)
-        Log.d("MainActivity", "Флаг миграции сброшен")
-    }
+
 
     private fun showAddProductDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_product, null)

@@ -32,12 +32,14 @@ class HomeViewModel(
         _startDate,
         _endDate
     ) { products, query, start, end ->
-        products.filter { it.date in start..end }
+        products
+            .filter { it.date in start..end }
             .filter { product ->
                 query.isBlank() ||
                         product.category.contains(query, ignoreCase = true) ||
                         product.comment.contains(query, ignoreCase = true)
             }
+            .sortedByDescending { it.date }   // сортировка по убыванию (новые сверху)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Обновление поиска
